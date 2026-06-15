@@ -8,24 +8,35 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Controller for accessing shared file download links.
+ *
+ * Security note: The share password is accepted via the X-Share-Password request header
+ * rather than a query parameter. Query parameters are logged by web servers, proxies,
+ * CDNs, and appear in browser history — all of which would expose the password.
+ * Headers are not logged by default and are not stored in browser history.
+ */
 @RestController
 @RequestMapping("/share")
 @RequiredArgsConstructor
 public class ShareLinkController {
+
     private final ShareLinkService shareLinkService;
 
+    /**
+     * Downloads a file via a share token.
+     *
+     * @param token    the unique share token from the share URL
+     * @param password optional password for password-protected shares (sent as X-Share-Password header)
+     */
     @GetMapping("/{token}")
     public ResponseEntity<InputStreamResource> downloadSharedFile(
             @PathVariable String token,
-            @RequestParam(required = false) String password
+            @RequestHeader(value = "X-Share-Password", required = false) String password
     ) {
         FileDownloadResponse response = shareLinkService.downloadSharedFile(token, password);
         return ResponseEntity.ok()

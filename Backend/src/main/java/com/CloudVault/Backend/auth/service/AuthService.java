@@ -11,19 +11,24 @@ import com.CloudVault.Backend.auth.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
-    private static final String TOKEN_TYPE = "Bearer";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public AuthResponse register(RegisterRequest request) {
+    /**
+     * Registers a new user. Returns the generated JWT token and user info.
+     * The token is NOT included in AuthResponse — the caller (controller) sets it as a cookie.
+     */
+    @Transactional
+    public AuthServiceResult register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new UserAlreadyExistsException("Email already exists");
+            throw new UserAlreadyExistsException("Email already registered");
         }
 
         User user = User.builder()
@@ -36,10 +41,14 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String accessToken = jwtService.generateAccessToken(savedUser);
 
-        return new AuthResponse(accessToken, TOKEN_TYPE, savedUser.getEmail(), savedUser.getName());
+        return new AuthServiceResult(accessToken, new AuthResponse(accessToken));
     }
 
-    public AuthResponse login(LoginRequest request) {
+    /**
+     * Authenticates a user. Returns the generated JWT token and user info.
+     * The token is NOT included in AuthResponse — the caller (controller) sets it as a cookie.
+     */
+    public AuthServiceResult login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
 
@@ -49,6 +58,25 @@ public class AuthService {
 
         String accessToken = jwtService.generateAccessToken(user);
 
-        return new AuthResponse(accessToken, TOKEN_TYPE, user.getEmail(), user.getName());
+        return new AuthServiceResult(accessToken, new AuthResponse(accessToken));
     }
+
+    /**
+     * Invalidates all existing JWT tokens for the user by incrementing tokenVersion.
+     * Any previously issued token will fail validation since its embedded tokenVersion
+     * will no longer match the user's current tokenVersion.
+     */
+    @Transactional
+    public void logout(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setTokenVersion(user.getTokenVersion() + 1);
+            userRepository.save(user);
+        });
+    }
+
+    /**
+     * Internal result record to carry both the raw JWT string and the safe response DTO.
+     * The raw token is handed to the controller which sets it as an HttpOnly cookie.
+     */
+    public record AuthServiceResult(String token, AuthResponse response) {}
 }

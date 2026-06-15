@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Font Family definitions */
+  --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+
+  /* Theme variables (60-30-10 distribution) */
+  /* Default: Dark Luxury Theme */
+  --color-60: #0A0A0A;          /* Dominant canvas background */
+  --color-60-rgb: 10, 10, 10;
+  --color-30: #121212;          /* Secondary cards & containers */
+  --color-30-rgb: 18, 18, 18;
+  --color-30-hover: #1c1c1c;
+  --color-10: #0066FF;          /* Reserved Accent color */
+  --color-10-rgb: 0, 102, 255;
+  --color-10-hover: #3385FF;
+
+  /* Text colors */
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+
+  /* Borders & Highlights */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(18, 18, 18, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --shadow-primary: rgba(0, 0, 0, 0.5);
+}
+
+/* Light Theme overrides */
+:root.light {
+  --color-60: #FAFAF7;          /* Dominant light canvas */
+  --color-60-rgb: 250, 250, 247;
+  --color-30: #FFFFFF;          /* Secondary light card */
+  --color-30-rgb: 255, 255, 255;
+  --color-30-hover: #F3F3EF;
+  --color-10: #0055D4;
+  --color-10-rgb: 0, 85, 212;
+  --color-10-hover: #0044AA;
+
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #9CA3AF;
+
+  --border-color: rgba(0, 0, 0, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --shadow-primary: rgba(0, 0, 0, 0.02);
+}
+
+/* Global resets */
+body {
+  background-color: var(--color-60);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Lenis Smooth Scrolling */
+html.lenis {
+  height: auto;
+}
+.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis-smooth [data-lenis-prevent] {
+  overflow: clip;
+}
+.lenis-stopped {
+  overflow: hidden;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-60);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Glassmorphism utility */
+.glass-panel-tailwind {
+  background-color: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Conic progress telemetry */
+.circular-progress-box-tailwind {
+  background: conic-gradient(var(--color-10) var(--percent, 0%), rgba(255, 255, 255, 0.05) 0%);
+}
+.light .circular-progress-box-tailwind {
+  background: conic-gradient(var(--color-10) var(--percent, 0%), rgba(0, 0, 0, 0.05) 0%);
+}
+
+/* Marquee scrolling keyframes */
+@keyframes scrollLeft {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes scrollRight {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
