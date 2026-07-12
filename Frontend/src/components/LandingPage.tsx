@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { BrandLogo } from './BrandLogo';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -34,14 +35,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
         className="fixed top-0 left-0 w-full z-50 flex justify-center items-center py-5 transition-all duration-300"
       >
         <div className="w-full max-w-6xl px-6 flex justify-between items-center">
-          <div className="flex items-center gap-2 font-heading font-bold text-lg">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#0066FF" />
-              <path d="M2 17L12 22L22 17" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 12L12 17L22 12" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>CLOUD<span className="text-v10">VAULT</span></span>
-          </div>
+          <BrandLogo size={22} />
 
           <div className="hidden md:flex gap-8 items-center text-xs font-medium tracking-wide">
             <a href="#features" className="text-text-secondary hover:text-text-primary transition-colors">FEATURES</a>
@@ -67,17 +61,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </nav>
 
       {/* Hero Section */}
-      <header className="relative w-full max-w-4xl flex flex-col justify-center items-center px-6 pt-36 pb-16 text-center overflow-hidden">
+      <header className="relative w-full max-w-4xl flex flex-col justify-center items-center px-10 pt-36 pb-16 text-center overflow-hidden">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="flex flex-col items-center"
         >
-          <div className="inline-flex items-center gap-2 bg-v10/10 border border-v10/20 text-v10 text-xs font-semibold px-3 py-1 rounded-md mb-6 tracking-wide uppercase">
-            <span className="w-1.5 h-1.5 bg-v10 rounded-full"></span>
-            Zero-Knowledge Architecture Active
-          </div>
           <h1 className="font-heading font-extrabold text-4xl md:text-6xl tracking-tight leading-tight mb-6">
             Secure Storage.<br />
             <span className="bg-gradient-to-r from-v10 to-blue-400 bg-clip-text text-transparent">Absolute Sovereignty.</span>
