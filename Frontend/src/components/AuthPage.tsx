@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
+import { BrandLogo } from './BrandLogo';
 import type { UserInfoResponse } from '../services/api';
 
 /*
@@ -104,13 +105,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           className="w-full bg-v30/80 border border-white/10 backdrop-blur-md rounded-lg p-6 md:p-8 shadow-xl"
         >
           <div className="flex flex-col items-center gap-2 mb-6">
-            <div className="flex items-center gap-2 font-heading font-bold text-lg mb-2">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#0066FF" />
-                <path d="M2 17L12 22L22 17" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 12L12 17L22 12" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>CLOUD<span className="text-v10">VAULT</span></span>
+            <div className="mb-2">
+              <BrandLogo size={22} />
             </div>
             <h2 className="font-heading font-bold text-xl text-center">
               {mode === 'login' ? 'Access Secure Vault' : 'Initialize Personal Vault'}

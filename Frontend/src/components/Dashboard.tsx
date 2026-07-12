@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../services/api';
+import { BrandLogo } from './BrandLogo';
 import type { FileResponse, UserInfoResponse } from '../services/api';
 
 interface DashboardProps {
@@ -200,13 +201,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Sidebar Nav Shell */}
       <aside className="w-64 shrink-0 bg-v30 border-r border-white/5 p-5 flex flex-col justify-between h-screen sticky top-0">
         <div>
-          <div className="flex items-center gap-2 font-heading font-bold text-base mb-8">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#0066FF" />
-              <path d="M2 17L12 22L22 17" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 12L12 17L22 12" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>CLOUD<span className="text-v10">VAULT</span></span>
+          <div className="mb-8">
+            <BrandLogo size={22} />
           </div>
 
           <nav className="flex flex-col gap-1">

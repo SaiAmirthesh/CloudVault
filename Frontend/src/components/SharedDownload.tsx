@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../services/api';
+import { BrandLogo } from './BrandLogo';
 
 interface SharedDownloadProps {
   token: string;
@@ -33,13 +34,8 @@ export const SharedDownload: React.FC<SharedDownloadProps> = ({ token, onGoHome 
     <div className="flex flex-col items-center min-h-screen bg-v60 text-text-primary w-full relative overflow-y-auto">
       {/* Header */}
       <nav className="h-16 w-full max-w-5xl px-6 flex items-center justify-start z-10">
-        <div className="flex items-center gap-2 font-heading font-bold text-base select-none cursor-pointer" onClick={onGoHome}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#0066FF" />
-            <path d="M2 17L12 22L22 17" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 12L12 17L22 12" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>CLOUD<span className="text-v10">VAULT</span></span>
+        <div className="select-none cursor-pointer" onClick={onGoHome}>
+          <BrandLogo size={22} />
         </div>
       </nav>
 
