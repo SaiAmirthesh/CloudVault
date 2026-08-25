@@ -8,5 +8,5 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UploadSessionRepository extends JpaRepository<UploadSession, UUID> {
-    Optional<UploadSession> FindIdAndUser(UUID id, User user);
+    Optional<UploadSession> findByIdAndUser(UUID id, User user);
 }

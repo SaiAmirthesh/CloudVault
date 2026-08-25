@@ -1,7 +1,6 @@
 package com.CloudVault.Backend.file.entity;
 
 import com.CloudVault.Backend.auth.entity.User;
-import org.springframework.data.annotation.Id;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
