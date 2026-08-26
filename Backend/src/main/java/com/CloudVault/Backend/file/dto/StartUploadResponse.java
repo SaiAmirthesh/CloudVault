@@ -7,7 +7,7 @@ import java.util.UUID;
 public record StartUploadResponse(
         UUID uploadId,
         long chunkSize,
-        int TotalParts,
+        int totalParts,
         UploadStatus status
 ) {
 

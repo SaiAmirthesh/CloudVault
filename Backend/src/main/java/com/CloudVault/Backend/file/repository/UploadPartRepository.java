@@ -23,4 +23,5 @@ public interface UploadPartRepository extends JpaRepository<UploadPart, UUID> {
             int partNumber
     );
 
+    void deleteByUploadSession(UploadSession uploadSession);
 }

@@ -20,10 +20,10 @@ public class FileMetadata {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false, length = 512)
     private String originalFileName;
 
-    @Column(unique = true, nullable = false, length = 255)
+    @Column(unique = true, nullable = false, length = 512)
     private String objectKey;
 
     @Column(nullable = false)

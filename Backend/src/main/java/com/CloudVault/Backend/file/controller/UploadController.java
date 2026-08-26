@@ -1,8 +1,10 @@
 package com.CloudVault.Backend.file.controller;
 
+import com.CloudVault.Backend.file.dto.FileUploadResponse;
 import com.CloudVault.Backend.file.dto.StartUploadRequest;
 import com.CloudVault.Backend.file.dto.StartUploadResponse;
 import com.CloudVault.Backend.file.dto.UploadPartResponse;
+import com.CloudVault.Backend.file.dto.UploadStatusResponse;
 import com.CloudVault.Backend.file.service.UploadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -45,4 +47,25 @@ public class UploadController {
         );
     }
 
+    @GetMapping("/{uploadId}")
+    public ResponseEntity<UploadStatusResponse> getUploadStatus(
+            @PathVariable UUID uploadId
+    ) {
+        return ResponseEntity.ok(uploadService.getUploadStatus(uploadId));
+    }
+
+    @PostMapping("/{uploadId}/complete")
+    public ResponseEntity<FileUploadResponse> completeUpload(
+            @PathVariable UUID uploadId
+    ) {
+        return ResponseEntity.ok(uploadService.completeUpload(uploadId));
+    }
+
+    @DeleteMapping("/{uploadId}")
+    public ResponseEntity<Void> abortUpload(
+            @PathVariable UUID uploadId
+    ) {
+        uploadService.abortUpload(uploadId);
+        return ResponseEntity.noContent().build();
+    }
 }

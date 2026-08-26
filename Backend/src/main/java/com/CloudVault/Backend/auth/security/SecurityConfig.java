@@ -75,6 +75,8 @@ public class SecurityConfig {
                 .ignoringRequestMatchers("/auth/login", "/auth/register")
                 // Share download is a public GET — CSRF not applicable to GET requests
                 .ignoringRequestMatchers("/share/**")
+                // Resumable upload endpoints handle JWT authentication directly
+                .ignoringRequestMatchers("/uploads/**")
                 // Swagger is dev-only
                 .ignoringRequestMatchers("/swagger-ui/**", "/v3/api-docs/**")
             )
@@ -120,6 +122,8 @@ public class SecurityConfig {
 
             // ── Authorization Rules ─────────────────────────────────────────────────
             .authorizeHttpRequests(auth -> auth
+                    // Allow CORS preflight requests
+                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // Public auth endpoints
                     .requestMatchers("/auth/login", "/auth/register").permitAll()
                     // Public share download
@@ -168,7 +172,7 @@ public class SecurityConfig {
                 "X-XSRF-TOKEN",
                 "X-Share-Password"
         ));
-        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN", "Content-Disposition"));
+        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN", "Content-Disposition", "ETag"));
         // Allow cookies — required for HttpOnly JWT cookie + CSRF cookie to be sent
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

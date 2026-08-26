@@ -49,6 +49,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
     }
   };
 
+  const RESUMABLE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
   const handleUpload = async () => {
     if (!file) return;
 
@@ -57,9 +59,15 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
     setProgress(0);
 
     try {
-      await api.uploadFile(file, (percent) => {
-        setProgress(percent);
-      });
+      if (file.size > RESUMABLE_THRESHOLD) {
+        await api.uploadFileResumable(file, (percent) => {
+          setProgress(percent);
+        });
+      } else {
+        await api.uploadFile(file, (percent) => {
+          setProgress(percent);
+        });
+      }
       setTimeout(() => {
         onUploadSuccess();
         handleClose();
@@ -187,8 +195,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                         <div className="h-full bg-v10 rounded-full transition-all duration-100" style={{ width: `${progress}%` }}></div>
                       </div>
                       <div className="flex justify-between text-[9px] text-text-muted">
-                        <span>Encrypting & streaming: {progress}%</span>
-                        <span>{progress === 100 ? 'Writing registry...' : 'Streaming packets'}</span>
+                        <span>{file.size > RESUMABLE_THRESHOLD ? 'Chunked Resumable Upload' : 'Uploading'}: {progress}%</span>
+                        <span>{progress === 100 ? 'Writing registry...' : file.size > RESUMABLE_THRESHOLD ? 'Uploading chunks' : 'Streaming packets'}</span>
                       </div>
                     </div>
                   )}

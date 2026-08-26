@@ -33,7 +33,7 @@ public class UploadPart {
     @Column(name = "part_number", nullable = false)
     private int partNumber;
 
-    @Column(nullable = false, length = 128)
+    @Column(nullable = false, length = 255)
     private String etag;
 
     @Column(nullable = false)

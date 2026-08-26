@@ -2,11 +2,16 @@ package com.CloudVault.Backend.file.service;
 
 import com.CloudVault.Backend.auth.entity.User;
 import com.CloudVault.Backend.auth.security.AuthenticatedUserService;
+import com.CloudVault.Backend.file.dto.FileUploadResponse;
 import com.CloudVault.Backend.file.dto.StartUploadRequest;
 import com.CloudVault.Backend.file.dto.StartUploadResponse;
 import com.CloudVault.Backend.file.dto.UploadPartResponse;
+import com.CloudVault.Backend.file.dto.UploadStatusResponse;
+import com.CloudVault.Backend.file.entity.FileMetadata;
+import com.CloudVault.Backend.file.entity.UploadPart;
 import com.CloudVault.Backend.file.entity.UploadSession;
 import com.CloudVault.Backend.file.entity.UploadStatus;
+import com.CloudVault.Backend.file.repository.FileMetadataRepository;
 import com.CloudVault.Backend.file.repository.UploadPartRepository;
 import com.CloudVault.Backend.file.repository.UploadSessionRepository;
 import com.CloudVault.Backend.storage.service.StorageService;
@@ -16,9 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.CloudVault.Backend.exception.ResourceNotFoundException;
-import com.CloudVault.Backend.file.entity.UploadPart;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +40,7 @@ public class UploadService {
     private final StorageService storageService;
     private final AuthenticatedUserService authenticatedUserService;
     private final UploadPartRepository uploadPartRepository;
+    private final FileMetadataRepository fileMetadataRepository;
 
     @Transactional
     public StartUploadResponse startUpload(StartUploadRequest request) {
@@ -86,12 +97,16 @@ public class UploadService {
             UUID userId,
             String fileName
     ) {
+        String safeName = fileName == null || fileName.isBlank() ? "file" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (safeName.length() > 50) {
+            safeName = safeName.substring(safeName.length() - 50);
+        }
         return "uploads/"
                 + userId
                 + "/"
                 + UUID.randomUUID()
                 + "-"
-                + fileName;
+                + safeName;
     }
 
     @Transactional
@@ -99,7 +114,11 @@ public class UploadService {
             UUID uploadId,
             int partNumber,
             MultipartFile file
-    ){
+    ) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Part file cannot be empty");
+        }
+
         User currentUser = authenticatedUserService.getCurrentUser();
 
         UploadSession uploadSession =
@@ -180,5 +199,101 @@ public class UploadService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public UploadStatusResponse getUploadStatus(UUID uploadId) {
+        User currentUser = authenticatedUserService.getCurrentUser();
+        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
+                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
 
-}
+        List<UploadPart> parts = uploadPartRepository.findByUploadSessionOrderByPartNumberAsc(session);
+        List<Integer> uploadedParts = parts.stream()
+                .map(UploadPart::getPartNumber)
+                .sorted()
+                .toList();
+
+        Set<Integer> uploadedSet = new HashSet<>(uploadedParts);
+        List<Integer> missingParts = IntStream.rangeClosed(1, session.getTotalParts())
+                .filter(p -> !uploadedSet.contains(p))
+                .boxed()
+                .toList();
+
+        return new UploadStatusResponse(
+                session.getId(),
+                session.getFileName(),
+                session.getTotalSize(),
+                session.getTotalParts(),
+                session.getStatus(),
+                uploadedParts,
+                missingParts
+        );
+    }
+
+    @Transactional
+    public FileUploadResponse completeUpload(UUID uploadId) {
+        User currentUser = authenticatedUserService.getCurrentUser();
+        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
+                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
+
+        if (session.getStatus() != UploadStatus.UPLOADING) {
+            throw new IllegalStateException("Upload session is not in UPLOADING state");
+        }
+
+        List<UploadPart> parts = uploadPartRepository.findByUploadSessionOrderByPartNumberAsc(session);
+        if (parts.size() != session.getTotalParts()) {
+            Set<Integer> uploadedSet = parts.stream().map(UploadPart::getPartNumber).collect(Collectors.toSet());
+            List<Integer> missingParts = IntStream.rangeClosed(1, session.getTotalParts())
+                    .filter(p -> !uploadedSet.contains(p))
+                    .boxed()
+                    .toList();
+            throw new IllegalStateException("Cannot complete upload: missing parts " + missingParts);
+        }
+
+        List<CompletedPart> completedParts = parts.stream()
+                .map(p -> CompletedPart.builder()
+                        .partNumber(p.getPartNumber())
+                        .eTag(p.getEtag())
+                        .build())
+                .toList();
+
+        storageService.completeMultipartUpload(
+                session.getObjectKey(),
+                session.getMinioUploadId(),
+                completedParts
+        );
+
+        FileMetadata metadata = FileMetadata.builder()
+                .originalFileName(session.getFileName())
+                .objectKey(session.getObjectKey())
+                .size(session.getTotalSize())
+                .contentType(session.getContentType() == null || session.getContentType().isBlank()
+                        ? "application/octet-stream"
+                        : session.getContentType())
+                .owner(currentUser)
+                .build();
+
+        FileMetadata savedFile = fileMetadataRepository.save(metadata);
+
+        session.setStatus(UploadStatus.COMPLETED);
+        uploadSessionRepository.save(session);
+
+        return new FileUploadResponse(savedFile.getId(), savedFile.getOriginalFileName());
+    }
+
+    @Transactional
+    public void abortUpload(UUID uploadId) {
+        User currentUser = authenticatedUserService.getCurrentUser();
+        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
+                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
+
+        try {
+            storageService.abortMultipartUpload(
+                    session.getObjectKey(),
+                    session.getMinioUploadId()
+            );
+        } catch (Exception ignored) {
+        }
+
+        uploadPartRepository.deleteByUploadSession(session);
+        uploadSessionRepository.delete(session);
+    }
+}

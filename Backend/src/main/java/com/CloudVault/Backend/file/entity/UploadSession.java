@@ -25,10 +25,10 @@ public class UploadSession {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 512)
     private String fileName;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String contentType;
 
     @Column(nullable = false)
@@ -44,10 +44,10 @@ public class UploadSession {
     @Column(nullable = false)
     private UploadStatus status;
 
-    @Column(nullable = false, unique = true, length = 128)
+    @Column(nullable = false, unique = true, length = 512)
     private String objectKey;
 
-    @Column(nullable = false, length = 128)
+    @Column(nullable = false, length = 512)
     private String minioUploadId;
 
     @CreationTimestamp

@@ -49,6 +49,29 @@ export interface ShareLinkResponse {
   createdAt: string;
 }
 
+export interface StartUploadResponse {
+  uploadId: string;
+  chunkSize: number;
+  totalParts: number;
+  status: string;
+}
+
+export interface UploadPartResponse {
+  partNumber: number;
+  size: number;
+  etag: string;
+}
+
+export interface UploadStatusResponse {
+  uploadId: string;
+  fileName: string;
+  totalSize: number;
+  totalParts: number;
+  status: string;
+  uploadedParts: number[];
+  missingParts: number[];
+}
+
 // ── CSRF Token Helpers ────────────────────────────────────────────────────────
 
 /**
@@ -209,6 +232,142 @@ export const api = {
       formData.append('file', file);
       xhr.send(formData);
     });
+  },
+
+  // ── Resumable Upload Endpoints ───────────────────────────────────────────────
+
+  async startResumableUpload(fileName: string, totalSize: number, contentType: string): Promise<StartUploadResponse> {
+    const res = await apiFetch(`${API_BASE}/uploads`, {
+      method: 'POST',
+      headers: getMutationHeaders(),
+      body: JSON.stringify({
+        fileName,
+        totalSize,
+        contentType: contentType || 'application/octet-stream',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to initiate resumable upload' }));
+      throw new Error(err.message || 'Failed to initiate resumable upload');
+    }
+    return res.json();
+  },
+
+  uploadPart(
+    uploadId: string,
+    partNumber: number,
+    chunk: Blob,
+    fileName: string,
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<UploadPartResponse> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `${API_BASE}/uploads/${uploadId}/parts/${partNumber}`, true);
+      xhr.withCredentials = true;
+
+      const csrf = getCsrfToken();
+      if (csrf) {
+        xhr.setRequestHeader('X-XSRF-TOKEN', csrf);
+      }
+
+      if (onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status === 200 || xhr.status === 201) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error(`Invalid response for part ${partNumber}`));
+          }
+        } else {
+          reject(new Error(`Failed to upload part ${partNumber} (status ${xhr.status})`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error(`Network error uploading part ${partNumber}`));
+      };
+
+      const formData = new FormData();
+      formData.append('file', chunk, fileName);
+      xhr.send(formData);
+    });
+  },
+
+  async getResumableUploadStatus(uploadId: string): Promise<UploadStatusResponse> {
+    const res = await apiFetch(`${API_BASE}/uploads/${uploadId}`);
+    if (!res.ok) {
+      throw new Error('Failed to get upload status');
+    }
+    return res.json();
+  },
+
+  async completeResumableUpload(uploadId: string): Promise<{ id: string; originalFileName: string }> {
+    const res = await apiFetch(`${API_BASE}/uploads/${uploadId}/complete`, {
+      method: 'POST',
+      headers: getMutationHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Failed to complete resumable upload' }));
+      throw new Error(err.message || 'Failed to complete resumable upload');
+    }
+    return res.json();
+  },
+
+  async abortResumableUpload(uploadId: string): Promise<void> {
+    await apiFetch(`${API_BASE}/uploads/${uploadId}`, {
+      method: 'DELETE',
+      headers: getMutationHeaders(),
+    });
+  },
+
+  /**
+   * Performs a full chunked resumable upload for a given file.
+   * Uploads file in 10MB chunks, tracking progress and finalizing upon completion.
+   */
+  async uploadFileResumable(
+    file: File,
+    onProgress: (percent: number) => void
+  ): Promise<{ id: string; originalFileName: string }> {
+    // 1. Start upload session
+    const session = await this.startResumableUpload(
+      file.name,
+      file.size,
+      file.type || 'application/octet-stream'
+    );
+
+    const uploadId = session.uploadId;
+    const chunkSize = session.chunkSize || (10 * 1024 * 1024);
+    const totalParts = session.totalParts || (session as any).TotalParts || Math.ceil(file.size / chunkSize);
+    let totalUploadedBytes = 0;
+
+    // 2. Upload each chunk sequentially
+    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      const start = (partNumber - 1) * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end);
+
+      let lastLoadedForPart = 0;
+
+      await this.uploadPart(uploadId, partNumber, chunk, file.name, (loaded) => {
+        const delta = loaded - lastLoadedForPart;
+        lastLoadedForPart = loaded;
+        totalUploadedBytes += delta;
+        const overallPercent = Math.min(99, Math.round((totalUploadedBytes / file.size) * 100));
+        onProgress(overallPercent);
+      });
+    }
+
+    // 3. Complete upload
+    const result = await this.completeResumableUpload(uploadId);
+    onProgress(100);
+    return result;
   },
 
   async downloadFile(id: string, filename: string): Promise<void> {
