@@ -43,7 +43,10 @@ public class UploadCleanupScheduler {
                         session.getMinioUploadId()
                 );
             } catch (Exception e) {
-                log.warn("Failed to abort MinIO upload for session {}: {}", session.getId(), e.getMessage());
+                if (e.getMessage() == null || !e.getMessage().contains("NoSuchUpload")) {
+                    log.warn("Failed to abort MinIO upload for session {}: {}", session.getId(), e.getMessage());
+                    continue;
+                }
             }
 
             try {

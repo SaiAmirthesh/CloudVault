@@ -55,4 +55,7 @@ public class UploadSession {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    @Version
+    private Long version;
 }
