@@ -217,30 +217,23 @@ minio.secret-key=password123
 
 ## Future Roadmap
 
+> [!IMPORTANT]
+> **Current Active Scope**: Background Jobs / Background Workers. Development is currently focused on implementing event-driven processing and background tasks.
+
+
 ### Phase 2
-
-* Redis Caching
-* File Metadata Caching
-* Download Statistics
-
-### Phase 3
 
 * Kafka Event Processing
 * Background Workers
 * Thumbnail Generation
 
+### Phase 3
+
+* Redis Caching
+* File Metadata Caching
+* Download Statistics
+
 ### Phase 4
-
-* Elasticsearch Integration
-* Full Text Search
-
-### Phase 5
-
-* Microservices Architecture
-* API Gateway
-* gRPC Communication
-
-### Phase 6
 
 * Observability
 * Prometheus
