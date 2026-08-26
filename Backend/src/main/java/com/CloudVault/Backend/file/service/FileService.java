@@ -57,8 +57,7 @@ public class FileService {
         Pageable sortedPageable = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
-                Sort.by(Sort.Direction.DESC, "uploadedAt")
-        );
+                Sort.by(Sort.Direction.DESC, "uploadedAt"));
 
         return fileMetadataRepository.findByOwner(currentUser, sortedPageable)
                 .map(this::toFileResponse);
@@ -96,8 +95,7 @@ public class FileService {
                 file.getOriginalFileName(),
                 file.getSize(),
                 file.getContentType(),
-                file.getUploadedAt()
-        );
+                file.getUploadedAt());
     }
 
     private FileDownloadResponse toDownloadResponse(FileMetadata file) {
@@ -106,8 +104,7 @@ public class FileService {
                 file.getOriginalFileName(),
                 file.getContentType(),
                 file.getSize(),
-                new InputStreamResource(storageService.downloadFile(file.getObjectKey()))
-        );
+                new InputStreamResource(storageService.downloadFile(file.getObjectKey())));
     }
 
     private String resolveContentType(String contentType) {
