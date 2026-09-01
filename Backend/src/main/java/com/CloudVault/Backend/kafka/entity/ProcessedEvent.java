@@ -21,7 +21,13 @@ import java.util.UUID;
 public class ProcessedEvent {
 
     @Id
+    private String id; // consumerGroup + ":" + eventId
+
+    @Column(nullable = false)
     private UUID eventId;
+
+    @Column(nullable = false)
+    private String consumerGroup;
 
     @Column(nullable = false)
     private String eventType;
@@ -29,4 +35,3 @@ public class ProcessedEvent {
     @Column(nullable = false)
     private LocalDateTime processedAt;
 }
-

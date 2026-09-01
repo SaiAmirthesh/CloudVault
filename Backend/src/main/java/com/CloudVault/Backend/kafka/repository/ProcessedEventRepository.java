@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.UUID;
 
 @Repository
-public interface ProcessedEventRepository extends JpaRepository<ProcessedEvent, UUID> {
-    boolean existsByEventId(UUID eventId);
+public interface ProcessedEventRepository extends JpaRepository<ProcessedEvent, String> {
+    boolean existsByEventIdAndConsumerGroup(UUID eventId, String consumerGroup);
 }
-

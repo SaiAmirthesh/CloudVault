@@ -40,7 +40,7 @@ public class StorageService {
 
     public String uploadFile(MultipartFile file) {
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
             String objectKey =
                     UUID.randomUUID() +
                             "-" +
@@ -53,7 +53,7 @@ public class StorageService {
                             .bucket(bucketName)
                             .object(objectKey)
                             .stream(
-                                    file.getInputStream(),
+                                    inputStream,
                                     file.getSize(),
                                     -1
                             )
