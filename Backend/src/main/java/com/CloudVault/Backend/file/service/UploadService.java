@@ -2,6 +2,7 @@ package com.CloudVault.Backend.file.service;
 
 import com.CloudVault.Backend.auth.entity.User;
 import com.CloudVault.Backend.auth.security.AuthenticatedUserService;
+import com.CloudVault.Backend.exception.ResourceNotFoundException;
 import com.CloudVault.Backend.file.dto.FileUploadResponse;
 import com.CloudVault.Backend.file.dto.StartUploadRequest;
 import com.CloudVault.Backend.file.dto.StartUploadResponse;
@@ -14,13 +15,15 @@ import com.CloudVault.Backend.file.entity.UploadStatus;
 import com.CloudVault.Backend.file.repository.FileMetadataRepository;
 import com.CloudVault.Backend.file.repository.UploadPartRepository;
 import com.CloudVault.Backend.file.repository.UploadSessionRepository;
+import com.CloudVault.Backend.kafka.event.FileUploadedEvent;
+import com.CloudVault.Backend.kafka.producer.FileEventProducer;
 import com.CloudVault.Backend.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
-import com.CloudVault.Backend.exception.ResourceNotFoundException;
+import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 
 import java.util.HashSet;
@@ -41,7 +44,8 @@ public class UploadService {
     private final AuthenticatedUserService authenticatedUserService;
     private final UploadPartRepository uploadPartRepository;
     private final FileMetadataRepository fileMetadataRepository;
-    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final TransactionTemplate transactionTemplate;
+    private final FileEventProducer fileEventProducer;
 
     public StartUploadResponse startUpload(StartUploadRequest request) {
 
@@ -52,7 +56,9 @@ public class UploadService {
         );
 
         if (totalParts > 10000) {
-            throw new IllegalArgumentException("Upload size exceeds maximum allowed parts");
+            throw new IllegalArgumentException(
+                    "Upload size exceeds maximum allowed parts"
+            );
         }
 
         String objectKey = generateObjectKey(
@@ -87,12 +93,19 @@ public class UploadService {
                 .build();
 
         UploadSession savedSession;
+
         try {
             savedSession = uploadSessionRepository.save(uploadSession);
         } catch (Exception e) {
+
             try {
-                storageService.abortMultipartUpload(objectKey, minioUploadId);
-            } catch (Exception ignored) {}
+                storageService.abortMultipartUpload(
+                        objectKey,
+                        minioUploadId
+                );
+            } catch (Exception ignored) {
+            }
+
             throw e;
         }
 
@@ -108,10 +121,22 @@ public class UploadService {
             UUID userId,
             String fileName
     ) {
-        String safeName = fileName == null || fileName.isBlank() ? "file" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+
+        String safeName =
+                fileName == null || fileName.isBlank()
+                        ? "file"
+                        : fileName.replaceAll(
+                        "[^a-zA-Z0-9._-]",
+                        "_"
+                );
+
         if (safeName.length() > 50) {
-            safeName = safeName.substring(safeName.length() - 50);
+            safeName =
+                    safeName.substring(
+                            safeName.length() - 50
+                    );
         }
+
         return "uploads/"
                 + userId
                 + "/"
@@ -125,22 +150,31 @@ public class UploadService {
             int partNumber,
             MultipartFile file
     ) {
+
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Part file cannot be empty");
+            throw new IllegalArgumentException(
+                    "Part file cannot be empty"
+            );
         }
 
-        User currentUser = authenticatedUserService.getCurrentUser();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
         UploadSession uploadSession =
                 uploadSessionRepository
-                        .findByIdAndUser(uploadId, currentUser)
+                        .findByIdAndUser(
+                                uploadId,
+                                currentUser
+                        )
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
                                         "Upload session not found"
                                 )
                         );
 
-        if (uploadSession.getStatus() != UploadStatus.UPLOADING) {
+        if (uploadSession.getStatus()
+                != UploadStatus.UPLOADING) {
+
             throw new IllegalStateException(
                     "Upload session is not accepting parts"
             );
@@ -148,59 +182,90 @@ public class UploadService {
 
         if (partNumber < 1 ||
                 partNumber > uploadSession.getTotalParts()) {
+
             throw new IllegalArgumentException(
                     "Invalid part number"
             );
         }
 
-        long expectedMaxSize = uploadSession.getChunkSize();
+        long expectedMaxSize =
+                uploadSession.getChunkSize();
 
         if (partNumber < uploadSession.getTotalParts()
                 && file.getSize() != expectedMaxSize) {
+
             throw new IllegalArgumentException(
                     "Invalid part size"
             );
         }
 
         if (file.getSize() > expectedMaxSize) {
+
             throw new IllegalArgumentException(
                     "Part exceeds configured chunk size"
             );
         }
 
         try {
-            String etag = storageService.uploadPart(
-                    uploadSession.getObjectKey(),
-                    uploadSession.getMinioUploadId(),
-                    partNumber,
-                    file.getInputStream(),
-                    file.getSize()
-            );
 
-            UploadPart uploadPart = uploadPartRepository
-                    .findByUploadSessionAndPartNumber(uploadSession, partNumber)
-                    .orElse(null);
+            String etag =
+                    storageService.uploadPart(
+                            uploadSession.getObjectKey(),
+                            uploadSession.getMinioUploadId(),
+                            partNumber,
+                            file.getInputStream(),
+                            file.getSize()
+                    );
+
+            UploadPart uploadPart =
+                    uploadPartRepository
+                            .findByUploadSessionAndPartNumber(
+                                    uploadSession,
+                                    partNumber
+                            )
+                            .orElse(null);
 
             if (uploadPart == null) {
+
                 try {
-                    uploadPart = UploadPart.builder()
-                            .uploadSession(uploadSession)
-                            .partNumber(partNumber)
-                            .etag(etag)
-                            .size(file.getSize())
-                            .build();
-                    uploadPartRepository.saveAndFlush(uploadPart);
-                } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-                    uploadPart = uploadPartRepository
-                            .findByUploadSessionAndPartNumber(uploadSession, partNumber)
-                            .orElseThrow(() -> new RuntimeException("Concurrent insert failed to retrieve part"));
+
+                    uploadPart =
+                            UploadPart.builder()
+                                    .uploadSession(uploadSession)
+                                    .partNumber(partNumber)
+                                    .etag(etag)
+                                    .size(file.getSize())
+                                    .build();
+
+                    uploadPartRepository.saveAndFlush(
+                            uploadPart
+                    );
+
+                } catch (DataIntegrityViolationException ex) {
+
+                    uploadPart =
+                            uploadPartRepository
+                                    .findByUploadSessionAndPartNumber(
+                                            uploadSession,
+                                            partNumber
+                                    )
+                                    .orElseThrow(() ->
+                                            new RuntimeException(
+                                                    "Concurrent insert failed to retrieve part"
+                                            )
+                                    );
+
                     uploadPart.setEtag(etag);
                     uploadPart.setSize(file.getSize());
+
                     uploadPartRepository.save(uploadPart);
                 }
+
             } else {
+
                 uploadPart.setEtag(etag);
                 uploadPart.setSize(file.getSize());
+
                 uploadPartRepository.save(uploadPart);
             }
 
@@ -211,6 +276,7 @@ public class UploadService {
             );
 
         } catch (Exception e) {
+
             throw new RuntimeException(
                     "Failed to upload part " + partNumber,
                     e
@@ -219,22 +285,51 @@ public class UploadService {
     }
 
     @Transactional(readOnly = true)
-    public UploadStatusResponse getUploadStatus(UUID uploadId) {
-        User currentUser = authenticatedUserService.getCurrentUser();
-        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
-                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
+    public UploadStatusResponse getUploadStatus(
+            UUID uploadId
+    ) {
 
-        List<UploadPart> parts = uploadPartRepository.findByUploadSessionOrderByPartNumberAsc(session);
-        List<Integer> uploadedParts = parts.stream()
-                .map(UploadPart::getPartNumber)
-                .sorted()
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        Set<Integer> uploadedSet = new HashSet<>(uploadedParts);
-        List<Integer> missingParts = IntStream.rangeClosed(1, session.getTotalParts())
-                .filter(p -> !uploadedSet.contains(p))
-                .boxed()
-                .toList();
+        UploadSession session =
+                uploadSessionRepository
+                        .findByIdAndUser(
+                                uploadId,
+                                currentUser
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Upload session not found"
+                                )
+                        );
+
+        List<UploadPart> parts =
+                uploadPartRepository
+                        .findByUploadSessionOrderByPartNumberAsc(
+                                session
+                        );
+
+        List<Integer> uploadedParts =
+                parts.stream()
+                        .map(UploadPart::getPartNumber)
+                        .sorted()
+                        .toList();
+
+        Set<Integer> uploadedSet =
+                new HashSet<>(uploadedParts);
+
+        List<Integer> missingParts =
+                IntStream
+                        .rangeClosed(
+                                1,
+                                session.getTotalParts()
+                        )
+                        .filter(p ->
+                                !uploadedSet.contains(p)
+                        )
+                        .boxed()
+                        .toList();
 
         return new UploadStatusResponse(
                 session.getId(),
@@ -247,96 +342,233 @@ public class UploadService {
         );
     }
 
-    public FileUploadResponse completeUpload(UUID uploadId) {
-        User currentUser = authenticatedUserService.getCurrentUser();
-        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
-                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
+    public FileUploadResponse completeUpload(
+            UUID uploadId
+    ) {
 
-        if (session.getStatus() != UploadStatus.UPLOADING && session.getStatus() != UploadStatus.COMPLETING) {
-            throw new IllegalStateException("Upload session is not in UPLOADING or COMPLETING state");
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        UploadSession session =
+                uploadSessionRepository
+                        .findByIdAndUser(
+                                uploadId,
+                                currentUser
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Upload session not found"
+                                )
+                        );
+
+        if (session.getStatus() != UploadStatus.UPLOADING
+                && session.getStatus() != UploadStatus.COMPLETING) {
+
+            throw new IllegalStateException(
+                    "Upload session is not in UPLOADING or COMPLETING state"
+            );
         }
 
-        List<UploadPart> parts = uploadPartRepository.findByUploadSessionOrderByPartNumberAsc(session);
+        List<UploadPart> parts =
+                uploadPartRepository
+                        .findByUploadSessionOrderByPartNumberAsc(
+                                session
+                        );
+
         if (parts.size() != session.getTotalParts()) {
-            Set<Integer> uploadedSet = parts.stream().map(UploadPart::getPartNumber).collect(Collectors.toSet());
-            List<Integer> missingParts = IntStream.rangeClosed(1, session.getTotalParts())
-                    .filter(p -> !uploadedSet.contains(p))
-                    .boxed()
-                    .toList();
-            throw new IllegalStateException("Cannot complete upload: missing parts " + missingParts);
+
+            Set<Integer> uploadedSet =
+                    parts.stream()
+                            .map(UploadPart::getPartNumber)
+                            .collect(Collectors.toSet());
+
+            List<Integer> missingParts =
+                    IntStream
+                            .rangeClosed(
+                                    1,
+                                    session.getTotalParts()
+                            )
+                            .filter(p ->
+                                    !uploadedSet.contains(p)
+                            )
+                            .boxed()
+                            .toList();
+
+            throw new IllegalStateException(
+                    "Cannot complete upload: missing parts "
+                            + missingParts
+            );
         }
 
         session.setStatus(UploadStatus.COMPLETING);
-        session = uploadSessionRepository.saveAndFlush(session);
 
-        List<CompletedPart> completedParts = parts.stream()
-                .map(p -> CompletedPart.builder()
-                        .partNumber(p.getPartNumber())
-                        .eTag(p.getEtag())
-                        .build())
-                .toList();
+        session =
+                uploadSessionRepository.saveAndFlush(
+                        session
+                );
+
+        List<CompletedPart> completedParts =
+                parts.stream()
+                        .map(p ->
+                                CompletedPart.builder()
+                                        .partNumber(
+                                                p.getPartNumber()
+                                        )
+                                        .eTag(
+                                                p.getEtag()
+                                        )
+                                        .build()
+                        )
+                        .toList();
 
         try {
+
             storageService.completeMultipartUpload(
                     session.getObjectKey(),
                     session.getMinioUploadId(),
                     completedParts
             );
+
         } catch (Exception e) {
-            // Revert state to uploading ONLY if not a NoSuchUpload error
-            if (e.getMessage() == null || !e.getMessage().contains("NoSuchUpload")) {
-                session.setStatus(UploadStatus.UPLOADING);
-                session = uploadSessionRepository.saveAndFlush(session);
+
+            if (e.getMessage() == null ||
+                    !e.getMessage()
+                            .contains("NoSuchUpload")) {
+
+                session.setStatus(
+                        UploadStatus.UPLOADING
+                );
+
+                session =
+                        uploadSessionRepository
+                                .saveAndFlush(session);
+
                 throw e;
             }
         }
 
-        long trueSize = parts.stream()
-                .mapToLong(UploadPart::getSize)
-                .sum();
+        long trueSize =
+                parts.stream()
+                        .mapToLong(UploadPart::getSize)
+                        .sum();
 
         final UploadSession finalSession = session;
-        FileMetadata savedFile = transactionTemplate.execute(status -> {
-            FileMetadata metadata = FileMetadata.builder()
-                    .originalFileName(finalSession.getFileName())
-                    .objectKey(finalSession.getObjectKey())
-                    .size(trueSize)
-                    .contentType(finalSession.getContentType() == null || finalSession.getContentType().isBlank()
-                            ? "application/octet-stream"
-                            : finalSession.getContentType())
-                    .owner(currentUser)
-                    .build();
 
-            FileMetadata saved = fileMetadataRepository.save(metadata);
+        FileMetadata savedFile =
+                transactionTemplate.execute(status -> {
 
-            finalSession.setStatus(UploadStatus.COMPLETED);
-            uploadSessionRepository.save(finalSession);
+                    FileMetadata metadata =
+                            FileMetadata.builder()
+                                    .originalFileName(
+                                            finalSession.getFileName()
+                                    )
+                                    .objectKey(
+                                            finalSession.getObjectKey()
+                                    )
+                                    .size(trueSize)
+                                    .contentType(
+                                            finalSession.getContentType()
+                                                    == null
+                                                    || finalSession
+                                                    .getContentType()
+                                                    .isBlank()
+                                                    ? "application/octet-stream"
+                                                    : finalSession
+                                                      .getContentType()
+                                    )
+                                    .owner(currentUser)
+                                    .build();
 
-            return saved;
-        });
-      
-        return new FileUploadResponse(savedFile.getId(), savedFile.getOriginalFileName());
+                    FileMetadata saved =
+                            fileMetadataRepository.save(
+                                    metadata
+                            );
+
+                    finalSession.setStatus(
+                            UploadStatus.COMPLETED
+                    );
+
+                    uploadSessionRepository.save(
+                            finalSession
+                    );
+
+                    return saved;
+                });
+
+        /*
+         * The file has now been successfully completed
+         * in MinIO and its metadata has been persisted
+         * in PostgreSQL.
+         *
+         * Only now do we publish the Kafka event.
+         */
+        FileUploadedEvent event =
+                new FileUploadedEvent(
+                        UUID.randomUUID(),
+                        savedFile.getId(),
+                        currentUser.getId(),
+                        savedFile.getOriginalFileName(),
+                        savedFile.getContentType(),
+                        savedFile.getSize(),
+                        savedFile.getObjectKey()
+                );
+
+        fileEventProducer.publishFileUploaded(
+                event
+        );
+
+        return new FileUploadResponse(
+                savedFile.getId(),
+                savedFile.getOriginalFileName()
+        );
     }
 
     public void abortUpload(UUID uploadId) {
-        User currentUser = authenticatedUserService.getCurrentUser();
-        UploadSession session = uploadSessionRepository.findByIdAndUser(uploadId, currentUser)
-                .orElseThrow(() -> new ResourceNotFoundException("Upload session not found"));
+
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        UploadSession session =
+                uploadSessionRepository
+                        .findByIdAndUser(
+                                uploadId,
+                                currentUser
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Upload session not found"
+                                )
+                        );
 
         try {
+
             storageService.abortMultipartUpload(
                     session.getObjectKey(),
                     session.getMinioUploadId()
             );
+
         } catch (Exception e) {
-            if (e.getMessage() == null || !e.getMessage().contains("NoSuchUpload")) {
+
+            if (e.getMessage() == null ||
+                    !e.getMessage()
+                            .contains("NoSuchUpload")) {
+
                 throw e;
             }
         }
 
-        transactionTemplate.executeWithoutResult(status -> {
-            uploadPartRepository.deleteByUploadSession(session);
-            uploadSessionRepository.delete(session);
-        });
+        transactionTemplate.executeWithoutResult(
+                status -> {
+
+                    uploadPartRepository
+                            .deleteByUploadSession(
+                                    session
+                            );
+
+                    uploadSessionRepository.delete(
+                            session
+                    );
+                }
+        );
     }
 }
