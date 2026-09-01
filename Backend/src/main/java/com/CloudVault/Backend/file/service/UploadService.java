@@ -504,6 +504,7 @@ public class UploadService {
          */
         FileUploadedEvent event =
                 new FileUploadedEvent(
+                        UUID.randomUUID(),
                         savedFile.getId(),
                         currentUser.getId(),
                         savedFile.getOriginalFileName(),
