@@ -38,4 +38,15 @@ public class FileMetadata {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    @Builder.Default
+    private SecurityScanStatus securityScanStatus = SecurityScanStatus.PENDING;
+
+    private LocalDateTime processedAt;
+
+    public SecurityScanStatus getSecurityScanStatus() {
+        return securityScanStatus == null ? SecurityScanStatus.PENDING : securityScanStatus;
+    }
 }

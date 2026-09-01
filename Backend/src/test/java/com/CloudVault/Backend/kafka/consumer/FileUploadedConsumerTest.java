@@ -43,22 +43,21 @@ class FileUploadedConsumerTest {
 
     @Test
     void consume_FirstTimeEvent_ShouldProcessAndSaveProcessedEvent() {
-        when(processedEventRepository.existsById(eventId)).thenReturn(false);
+        when(processedEventRepository.existsByEventIdAndConsumerGroup(eventId, "cloudvault-file-processor")).thenReturn(false);
 
         fileUploadedConsumer.consume(event);
 
-        verify(processedEventRepository, times(1)).existsById(eventId);
+        verify(processedEventRepository, times(1)).existsByEventIdAndConsumerGroup(eventId, "cloudvault-file-processor");
         verify(processedEventRepository, times(1)).saveAndFlush(any(ProcessedEvent.class));
     }
 
     @Test
     void consume_DuplicateEvent_ShouldSkipProcessing() {
-        when(processedEventRepository.existsById(eventId)).thenReturn(true);
+        when(processedEventRepository.existsByEventIdAndConsumerGroup(eventId, "cloudvault-file-processor")).thenReturn(true);
 
         fileUploadedConsumer.consume(event);
 
-        verify(processedEventRepository, times(1)).existsById(eventId);
+        verify(processedEventRepository, times(1)).existsByEventIdAndConsumerGroup(eventId, "cloudvault-file-processor");
         verify(processedEventRepository, never()).saveAndFlush(any(ProcessedEvent.class));
     }
 }
-

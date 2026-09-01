@@ -26,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 
+import java.io.InputStream;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -206,14 +208,14 @@ public class UploadService {
             );
         }
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
 
             String etag =
                     storageService.uploadPart(
                             uploadSession.getObjectKey(),
                             uploadSession.getMinioUploadId(),
                             partNumber,
-                            file.getInputStream(),
+                            inputStream,
                             file.getSize()
                     );
 

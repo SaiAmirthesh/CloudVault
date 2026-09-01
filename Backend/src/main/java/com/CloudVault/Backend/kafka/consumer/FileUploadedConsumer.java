@@ -56,8 +56,11 @@ public class FileUploadedConsumer {
             return;
         }
 
+        String consumerGroup = "cloudvault-file-processor";
+        String idempotencyKey = consumerGroup + ":" + event.eventId();
+
         // 1. Idempotency Check: Drop duplicate event if already processed
-        if (processedEventRepository.existsById(event.eventId())) {
+        if (processedEventRepository.existsByEventIdAndConsumerGroup(event.eventId(), consumerGroup)) {
             log.warn("Duplicate event detected (eventId={}), skipping re-processing.", event.eventId());
             return;
         }
@@ -65,7 +68,9 @@ public class FileUploadedConsumer {
         try {
             // 2. Mark event as processed in the database
             ProcessedEvent processedEvent = ProcessedEvent.builder()
+                    .id(idempotencyKey)
                     .eventId(event.eventId())
+                    .consumerGroup(consumerGroup)
                     .eventType("FILE_UPLOADED")
                     .processedAt(LocalDateTime.now())
                     .build();
