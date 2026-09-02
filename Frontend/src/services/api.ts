@@ -374,11 +374,23 @@ export const api = {
     const res = await apiFetch(`${API_BASE}/files/${id}`);
     if (!res.ok) throw new Error('Download failed');
 
+    // Retrieve headers from the actual response
+    const contentDisposition = res.headers.get('Content-Disposition');
+    let actualFilename = filename;
+
+    // Parse the filename from Content-Disposition if it's there
+    if (contentDisposition && contentDisposition.includes('filename=')) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) {
+            actualFilename = match[1];
+        }
+    }
+
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = actualFilename;
     document.body.appendChild(a);
     a.click();
     a.remove();
