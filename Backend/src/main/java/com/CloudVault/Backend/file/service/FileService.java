@@ -9,8 +9,13 @@ import com.CloudVault.Backend.file.dto.FileResponse;
 import com.CloudVault.Backend.file.dto.FileUploadResponse;
 import com.CloudVault.Backend.file.entity.FileMetadata;
 import com.CloudVault.Backend.file.repository.FileMetadataRepository;
+import com.CloudVault.Backend.kafka.entity.OutboxEvent;
+import com.CloudVault.Backend.kafka.entity.OutboxStatus;
+import com.CloudVault.Backend.kafka.event.FileUploadedEvent;
+import com.CloudVault.Backend.kafka.repository.OutboxEventRepository;
 import com.CloudVault.Backend.sharelink.repository.ShareLinkRepository;
 import com.CloudVault.Backend.storage.service.StorageService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
@@ -21,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -30,6 +36,8 @@ public class FileService {
     private final FileMetadataRepository fileMetadataRepository;
     private final ShareLinkRepository shareLinkRepository;
     private final AuthenticatedUserService authenticatedUserService;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public FileUploadResponse upload(MultipartFile file) {
@@ -48,6 +56,32 @@ public class FileService {
                 .build();
 
         FileMetadata saved = fileMetadataRepository.save(metadata);
+
+        FileUploadedEvent event = new FileUploadedEvent(
+                UUID.randomUUID(),
+                saved.getId(),
+                currentUser.getId(),
+                saved.getOriginalFileName(),
+                saved.getContentType(),
+                saved.getSize(),
+                saved.getObjectKey()
+        );
+
+        try {
+            OutboxEvent outboxEvent = OutboxEvent.builder()
+                    .id(UUID.randomUUID())
+                    .aggregateType("FileMetadata")
+                    .aggregateId(saved.getId().toString())
+                    .eventType("FILE_UPLOADED")
+                    .payload(objectMapper.writeValueAsString(event))
+                    .status(OutboxStatus.PENDING)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            outboxEventRepository.save(outboxEvent);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize event", e);
+        }
+
         return new FileUploadResponse(saved.getId(), saved.getOriginalFileName());
     }
 

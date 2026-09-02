@@ -16,8 +16,11 @@ import com.CloudVault.Backend.file.repository.FileMetadataRepository;
 import com.CloudVault.Backend.file.repository.UploadPartRepository;
 import com.CloudVault.Backend.file.repository.UploadSessionRepository;
 import com.CloudVault.Backend.kafka.event.FileUploadedEvent;
-import com.CloudVault.Backend.kafka.producer.FileEventProducer;
+import com.CloudVault.Backend.kafka.entity.OutboxEvent;
+import com.CloudVault.Backend.kafka.entity.OutboxStatus;
+import com.CloudVault.Backend.kafka.repository.OutboxEventRepository;
 import com.CloudVault.Backend.storage.service.StorageService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 
 import java.io.InputStream;
+import java.time.LocalDateTime;
 
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +51,8 @@ public class UploadService {
     private final UploadPartRepository uploadPartRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final TransactionTemplate transactionTemplate;
-    private final FileEventProducer fileEventProducer;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     public StartUploadResponse startUpload(StartUploadRequest request) {
 
@@ -494,30 +499,38 @@ public class UploadService {
                             finalSession
                     );
 
+                    /*
+                     * We persist the Kafka event into the Outbox table
+                     * within the same database transaction.
+                     */
+                    FileUploadedEvent event =
+                            new FileUploadedEvent(
+                                    UUID.randomUUID(),
+                                    saved.getId(),
+                                    currentUser.getId(),
+                                    saved.getOriginalFileName(),
+                                    saved.getContentType(),
+                                    saved.getSize(),
+                                    saved.getObjectKey()
+                            );
+
+                    try {
+                        OutboxEvent outboxEvent = OutboxEvent.builder()
+                                .id(UUID.randomUUID())
+                                .aggregateType("FileMetadata")
+                                .aggregateId(saved.getId().toString())
+                                .eventType("FILE_UPLOADED")
+                                .payload(objectMapper.writeValueAsString(event))
+                                .status(OutboxStatus.PENDING)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                        outboxEventRepository.save(outboxEvent);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to serialize event", e);
+                    }
+
                     return saved;
                 });
-
-        /*
-         * The file has now been successfully completed
-         * in MinIO and its metadata has been persisted
-         * in PostgreSQL.
-         *
-         * Only now do we publish the Kafka event.
-         */
-        FileUploadedEvent event =
-                new FileUploadedEvent(
-                        UUID.randomUUID(),
-                        savedFile.getId(),
-                        currentUser.getId(),
-                        savedFile.getOriginalFileName(),
-                        savedFile.getContentType(),
-                        savedFile.getSize(),
-                        savedFile.getObjectKey()
-                );
-
-        fileEventProducer.publishFileUploaded(
-                event
-        );
 
         return new FileUploadResponse(
                 savedFile.getId(),
